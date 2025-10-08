@@ -39,17 +39,21 @@ pub mod MockERC20 {
 
     #[constructor]
     fn constructor(
-        ref self: ContractState, recipient: ContractAddress, owner: ContractAddress, decimals: u8,
+        ref self: ContractState, 
+        recipient: ContractAddress, 
+        owner: ContractAddress, 
+        decimals: u8,
     ) {
         let name: ByteArray = "USDC";
         let symbol: ByteArray = "USDC";
-        // Initialize the ERC20 component
+        
         self.erc20.initializer(name, symbol);
         self.ownable.initializer(owner);
         self.custom_decimals.write(decimals);
-        self.erc20.mint(recipient, 20000);
+        
+        // Use a large amount for testing - 1 million USDC
+        self.erc20.mint(recipient, 1000000_000000);
     }
-
     #[abi(embed_v0)]
     impl CustomERC20MetadataImpl of IERC20Metadata<ContractState> {
         fn name(self: @ContractState) -> ByteArray {
