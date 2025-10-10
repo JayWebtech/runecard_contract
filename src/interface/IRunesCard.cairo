@@ -11,6 +11,8 @@ pub trait IRunesCard<TContractState> {
     fn get_users_cards(self: @TContractState) -> Array<Cards>;
     fn get_users_cards_paginated(self: @TContractState, page: u64, page_size: u64) -> (Array<Cards>, u64);
     fn get_user_card_count(self: @TContractState, user: ContractAddress) -> u64;
+    fn get_users_redeemed_cards_paginated(self: @TContractState, page: u64, page_size: u64) -> (Array<Cards>, u64);
+    fn get_user_redeemed_card_count(self: @TContractState, user: ContractAddress) -> u64;
     fn get_owner(self: @TContractState) -> ContractAddress;
     fn change_owner(ref self: TContractState, new_owner: ContractAddress);
     fn upgrade(ref self: TContractState, impl_hash: ClassHash, new_version: u8);

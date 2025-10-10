@@ -96,7 +96,9 @@ pub mod RunesCardV1 {
         user_cards: Map<
             (ContractAddress, u64), u64,
         >, // (user, user_sequence) -> global_txn_id
-        user_card_count: Map<ContractAddress, u64>
+        user_card_count: Map<ContractAddress, u64>,
+        redeemed_cards: Map<(ContractAddress, u64), u64>, // (user, sequence) -> card_id
+        redeemed_card_count: Map<ContractAddress, u64>
     }
 
     #[constructor]
@@ -212,10 +214,10 @@ pub mod RunesCardV1 {
             card.redeemed_at = get_block_timestamp();
             self.cards.write(id, card);
 
-            // Add to redeemer's card list
-            let user_count = self.user_card_count.read(caller);
-            self.user_cards.write((caller, user_count), id);
-            self.user_card_count.write(caller, user_count + 1);
+            // Add to redeemer's redeemed card list
+            let redeemed_count = self.redeemed_card_count.read(caller);
+            self.redeemed_cards.write((caller, redeemed_count), id);
+            self.redeemed_card_count.write(caller, redeemed_count + 1);
 
             // Emit event
             self.emit(CardRedeemed {
@@ -286,6 +288,41 @@ pub mod RunesCardV1 {
             }
             
             (cards, total_count)
+        }
+
+        fn get_users_redeemed_cards_paginated(
+            self: @ContractState, 
+            page: u64, 
+            page_size: u64
+        ) -> (Array<Cards>, u64) {
+            let caller = get_caller_address();
+            let total_count = self.redeemed_card_count.read(caller);
+            
+            assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
+            assert(page_size <= 50, PAGE_SIZE_TOO_LARGE);
+            
+            let start_index = page * page_size;
+            
+            if start_index >= total_count {
+                return (ArrayTrait::new(), total_count);
+            }
+            
+            let mut cards = ArrayTrait::new();
+            let mut i = start_index;
+            let end_index = core::cmp::min(start_index + page_size, total_count);
+            
+            while i < end_index {
+                let card_id = self.redeemed_cards.read((caller, i));
+                let card = self.cards.read(card_id);
+                cards.append(card);
+                i += 1;
+            }
+            
+            (cards, total_count)
+        }
+
+        fn get_user_redeemed_card_count(self: @ContractState, user: ContractAddress) -> u64 {
+            self.redeemed_card_count.read(user)
         }
         
         fn get_user_card_count(self: @ContractState, user: ContractAddress) -> u64 {
