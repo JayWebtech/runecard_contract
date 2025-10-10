@@ -4,7 +4,7 @@ use crate::types::structs::{Cards};
 
 #[starknet::interface]
 pub trait IRunesCard<TContractState> {
-    fn create_card(ref self: TContractState, token: ContractAddress, amount: u256, redeem_code_hash: felt252, description: ByteArray, link: felt252);
+    fn create_card(ref self: TContractState, token: ContractAddress, amount: u256, redeem_code_hash: felt252, description: ByteArray, link: felt252, card_type: u16);
     fn redeem_card(ref self: TContractState, redeem_code: felt252, id: u64);
     fn get_card_balance(self: @TContractState, id: u64) -> u256;
     fn get_card_by_id(self: @TContractState, id: u64) -> Cards;

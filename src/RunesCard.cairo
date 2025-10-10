@@ -120,7 +120,8 @@ pub mod RunesCardV1 {
             amount: u256,
             redeem_code_hash: felt252,
             description: ByteArray,
-            link: felt252
+            link: felt252,
+            card_type: u16,
         ) {
             assert(!self.is_paused.read(), CONTRACT_IS_PAUSED);
             assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
@@ -151,6 +152,7 @@ pub mod RunesCardV1 {
                 redeem_code_hash: redeem_code_hash,
                 description: description,
                 link: link,
+                card_type: card_type,
                 is_redeemed: false,
                 created_at: get_block_timestamp(),
                 redeemed_at: 0,

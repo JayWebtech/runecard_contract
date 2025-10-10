@@ -9,6 +9,7 @@ pub struct Cards {
     pub amount: u256,
     pub description: ByteArray,
     pub link: felt252,
+    pub card_type: u16,
     pub is_redeemed: bool,
     pub redeemed_by: ContractAddress,
     pub redeemed_at: u64,
