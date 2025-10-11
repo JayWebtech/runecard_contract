@@ -1,6 +1,6 @@
 use starknet::ContractAddress;
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, starknet::Store, Debug)]
 pub struct Cards {
     pub id: u64,
     pub redeem_code_hash: felt252,

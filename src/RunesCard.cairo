@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod RunesCardV1 {
+pub mod RunesCardV4  {
     use core::num::traits::Zero;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::class_hash::ClassHash;
@@ -93,11 +93,9 @@ pub mod RunesCardV1 {
         protocol_fee: u256,
         cards: Map<u64, Cards>,
         card_counter: u64,
-        user_cards: Map<
-            (ContractAddress, u64), u64,
-        >, // (user, user_sequence) -> global_txn_id
+        user_cards: Map<(ContractAddress, u64), u64>,
         user_card_count: Map<ContractAddress, u64>,
-        redeemed_cards: Map<(ContractAddress, u64), u64>, // (user, sequence) -> card_id
+        redeemed_cards: Map<(ContractAddress, u64), u64>,
         redeemed_card_count: Map<ContractAddress, u64>
     }
 
@@ -242,14 +240,13 @@ pub mod RunesCardV1 {
             self.cards.read(id)
         }
 
-        fn get_users_cards(self: @ContractState) -> Array<Cards> {
-            let caller = get_caller_address();
-            let count = self.user_card_count.read(caller);
+        fn get_users_cards(self: @ContractState, user: ContractAddress) -> Array<Cards> {
+            let count = self.user_card_count.read(user);
             let mut cards = ArrayTrait::new();
             let mut i: u64 = 0;
 
             while i < count {
-                let card_id = self.user_cards.read((caller, i));
+                let card_id = self.user_cards.read((user, i));
                 let card = self.cards.read(card_id);
                 cards.append(card);
                 i += 1;
@@ -261,10 +258,11 @@ pub mod RunesCardV1 {
         fn get_users_cards_paginated(
             self: @ContractState, 
             page: u64, 
-            page_size: u64
+            page_size: u64,
+            user: ContractAddress,
         ) -> (Array<Cards>, u64) {
-            let caller = get_caller_address();
-            let total_count = self.user_card_count.read(caller);
+            //let caller = get_caller_address();
+            let total_count = self.user_card_count.read(user);
             
             assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
             assert(page_size <= 50, PAGE_SIZE_TOO_LARGE);
@@ -281,7 +279,7 @@ pub mod RunesCardV1 {
             let end_index = core::cmp::min(start_index + page_size, total_count);
             
             while i < end_index {
-                let card_id = self.user_cards.read((caller, i));
+                let card_id = self.user_cards.read((user, i));
                 let card = self.cards.read(card_id);
                 cards.append(card);
                 i += 1;
@@ -293,10 +291,10 @@ pub mod RunesCardV1 {
         fn get_users_redeemed_cards_paginated(
             self: @ContractState, 
             page: u64, 
-            page_size: u64
+            page_size: u64,
+            user: ContractAddress
         ) -> (Array<Cards>, u64) {
-            let caller = get_caller_address();
-            let total_count = self.redeemed_card_count.read(caller);
+            let total_count = self.redeemed_card_count.read(user);
             
             assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
             assert(page_size <= 50, PAGE_SIZE_TOO_LARGE);
@@ -312,7 +310,7 @@ pub mod RunesCardV1 {
             let end_index = core::cmp::min(start_index + page_size, total_count);
             
             while i < end_index {
-                let card_id = self.redeemed_cards.read((caller, i));
+                let card_id = self.redeemed_cards.read((user, i));
                 let card = self.cards.read(card_id);
                 cards.append(card);
                 i += 1;

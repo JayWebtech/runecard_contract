@@ -105,7 +105,7 @@ mod tests {
 
         dispatcher
             .create_card(
-                token, CARD_AMOUNT, code_hash, "Birthday gift for Alice", 'https://card.link'
+                token, CARD_AMOUNT, code_hash, "Birthday gift for Alice", 'https://card.link', 1
             );
         
         // Verify card was created correctly
@@ -149,7 +149,7 @@ mod tests {
         while i < 3 {
             let code: felt252 = (i + 1000).into();
             let code_hash = hash_redeem_code(code);
-            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
             i += 1;
         }
 
@@ -179,7 +179,7 @@ mod tests {
         start_cheat_caller_address(dispatcher.contract_address, user1);
         token_dispatcher.approve(runes_card, CARD_AMOUNT);
         let code_hash = hash_redeem_code('CODE');
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test", 'link', 1);
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod tests {
         start_cheat_caller_address(dispatcher.contract_address, user1);
         let zero_address: ContractAddress = contract_address_const::<0>();
         let code_hash = hash_redeem_code('CODE');
-        dispatcher.create_card(zero_address, CARD_AMOUNT, code_hash, "Test", 'link');
+        dispatcher.create_card(zero_address, CARD_AMOUNT, code_hash, "Test", 'link', 1);
     }
 
     #[test]
@@ -202,7 +202,7 @@ mod tests {
 
         start_cheat_caller_address(dispatcher.contract_address, user1);
         let code_hash = hash_redeem_code('CODE');
-        dispatcher.create_card(token, 0, code_hash, "Test", 'link');
+        dispatcher.create_card(token, 0, code_hash, "Test", 'link', 1);
     }
 
     #[test]
@@ -214,7 +214,7 @@ mod tests {
 
         start_cheat_caller_address(dispatcher.contract_address, user1);
         token_dispatcher.approve(runes_card, CARD_AMOUNT);
-        dispatcher.create_card(token, CARD_AMOUNT, 0, "Test", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, 0, "Test", 'link', 1);
     }
 
     #[test]
@@ -226,7 +226,7 @@ mod tests {
         start_cheat_caller_address(dispatcher.contract_address, user1);
         let code_hash = hash_redeem_code('CODE');
         // No approval given
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test", 'link', 1);
     }
 
     #[test]
@@ -240,7 +240,7 @@ mod tests {
         // Only approve half the amount needed
         token_dispatcher.approve(runes_card, CARD_AMOUNT / 2);
         let code_hash = hash_redeem_code('CODE');
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test", 'link', 1);
     }
 
     // ============================================
@@ -262,7 +262,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         // Get balances before redemption
@@ -322,7 +322,7 @@ mod tests {
 
         start_cheat_caller_address(runes_card, user1);
 
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         let user2_balance_before = token_dispatcher.balance_of(user2);
@@ -362,7 +362,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         let user2_balance_before = token_dispatcher.balance_of(user2);
@@ -395,7 +395,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         start_cheat_caller_address(runes_card, owner);
@@ -426,7 +426,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         // User2 redeems (first time)
@@ -462,7 +462,7 @@ mod tests {
 
         start_cheat_caller_address(runes_card, user1);
 
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
 
         stop_cheat_caller_address(runes_card);
 
@@ -513,7 +513,7 @@ mod tests {
 
         start_cheat_caller_address(runes_card, user1);
 
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test Card", 'mylink');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Test Card", 'mylink', 1);
         stop_cheat_caller_address(runes_card);
 
         let card = dispatcher.get_card_by_id(1);
@@ -546,7 +546,7 @@ mod tests {
 
         start_cheat_caller_address(runes_card, user1);
 
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
 
         // Before redemption
         assert(dispatcher.get_card_balance(1) == CARD_AMOUNT, 'Wrong balance before');
@@ -576,7 +576,7 @@ mod tests {
         while i < 3 {
             let code: felt252 = (i + 1000).into();
             let code_hash = hash_redeem_code(code);
-            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
             i += 1;
         }
 
@@ -616,7 +616,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         // User2 redeems
@@ -651,12 +651,13 @@ mod tests {
         while i < 10 {
             let code: felt252 = (i + 1000).into();
             let code_hash = hash_redeem_code(code);
-            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
             i += 1;
         }
 
         // Test first page
         let (page1, total) = dispatcher.get_users_cards_paginated(0, 5);
+        println!("{:?}",page1);
         assert(page1.len() == 5, 'Page 1 should have 5');
         assert(total == 10, 'Total should be 10');
 
@@ -686,7 +687,7 @@ mod tests {
         while i < 7 {
             let code: felt252 = (i + 1000).into();
             let code_hash = hash_redeem_code(code);
-            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
             i += 1;
         }
 
@@ -716,7 +717,7 @@ mod tests {
         while i < 3 {
             let code: felt252 = (i + 1000).into();
             let code_hash = hash_redeem_code(code);
-            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
             i += 1;
         }
      
@@ -945,7 +946,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         start_cheat_caller_address(runes_card, user2);
@@ -1043,7 +1044,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
 
         // Balance should now equal card amount
         let balance = dispatcher.get_contract_token_balance(token);
@@ -1095,7 +1096,7 @@ mod tests {
         while i < 3 {
             let code: felt252 = (i + 1000).into();
             let code_hash = hash_redeem_code(code);
-            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+            dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
             i += 1;
         }
 
@@ -1117,7 +1118,7 @@ mod tests {
         stop_cheat_caller_address(token);
 
         start_cheat_caller_address(runes_card, user1);
-        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link');
+        dispatcher.create_card(token, CARD_AMOUNT, code_hash, "Gift", 'link', 1);
         stop_cheat_caller_address(runes_card);
 
         // User2 redeems

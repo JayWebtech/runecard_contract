@@ -8,10 +8,10 @@ pub trait IRunesCard<TContractState> {
     fn redeem_card(ref self: TContractState, redeem_code: felt252, id: u64);
     fn get_card_balance(self: @TContractState, id: u64) -> u256;
     fn get_card_by_id(self: @TContractState, id: u64) -> Cards;
-    fn get_users_cards(self: @TContractState) -> Array<Cards>;
-    fn get_users_cards_paginated(self: @TContractState, page: u64, page_size: u64) -> (Array<Cards>, u64);
+    fn get_users_cards(self: @TContractState, user: ContractAddress) -> Array<Cards>;
+    fn get_users_cards_paginated(self: @TContractState, page: u64, page_size: u64, user: ContractAddress) -> (Array<Cards>, u64);
     fn get_user_card_count(self: @TContractState, user: ContractAddress) -> u64;
-    fn get_users_redeemed_cards_paginated(self: @TContractState, page: u64, page_size: u64) -> (Array<Cards>, u64);
+    fn get_users_redeemed_cards_paginated(self: @TContractState, page: u64, page_size: u64, user: ContractAddress) -> (Array<Cards>, u64);
     fn get_user_redeemed_card_count(self: @TContractState, user: ContractAddress) -> u64;
     fn get_owner(self: @TContractState) -> ContractAddress;
     fn change_owner(ref self: TContractState, new_owner: ContractAddress);
