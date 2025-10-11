@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod RunesCardV4  {
+pub mod RunesCardV5  {
     use core::num::traits::Zero;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::class_hash::ClassHash;
@@ -96,7 +96,8 @@ pub mod RunesCardV4  {
         user_cards: Map<(ContractAddress, u64), u64>,
         user_card_count: Map<ContractAddress, u64>,
         redeemed_cards: Map<(ContractAddress, u64), u64>,
-        redeemed_card_count: Map<ContractAddress, u64>
+        redeemed_card_count: Map<ContractAddress, u64>,
+        total_fees_collected: Map<ContractAddress, u256>,
     }
 
     #[constructor]
@@ -204,6 +205,9 @@ pub mod RunesCardV4  {
             if fee_amount > 0 {
                 let fee_success = token_dispatcher.transfer(self.owner.read(), fee_amount);
                 assert(fee_success, TOKEN_TRANSFER_FAILED);
+
+                let current_fees = self.total_fees_collected.read(card.token);
+                self.total_fees_collected.write(card.token, current_fees + fee_amount);
             }
 
             // Update card status
@@ -414,6 +418,11 @@ pub mod RunesCardV4  {
             let token_dispatcher = IERC20Dispatcher { contract_address: token };
             token_dispatcher.balance_of(get_contract_address())
         }
+
+        fn get_total_fees_collected(self: @ContractState, token: ContractAddress) -> u256 {
+            self.total_fees_collected.read(token)
+        }
+
     }
 
     #[generate_trait]

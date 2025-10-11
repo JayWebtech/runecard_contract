@@ -24,5 +24,6 @@ pub trait IRunesCard<TContractState> {
     fn set_protocol_fee(ref self: TContractState, new_fee: u256);
     fn withdraw_fees(ref self: TContractState, token: ContractAddress, amount: u256, recipient: ContractAddress);
     fn get_contract_token_balance(self: @TContractState, token: ContractAddress) -> u256;
+    fn get_total_fees_collected(self: @TContractState, token: ContractAddress) -> u256;
 }   
 
