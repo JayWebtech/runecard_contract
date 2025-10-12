@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod RunesCardV5  {
+pub mod RunesCardV1  {
     use core::num::traits::Zero;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::class_hash::ClassHash;
@@ -12,7 +12,7 @@ pub mod RunesCardV5  {
     use crate::types::errors::{
         AMOUNT_MUST_BE_GREATER_THAN_ZERO, CLASS_HASH_CANNOT_BE_ZERO, CONTRACT_IS_ACTIVE_ALREADY,
         CONTRACT_IS_PAUSED, CONTRACT_IS_PAUSED_ALREADY, INSUFFICIENT_ALLOWANCE,
-        INVALID_TOKEN_ADDRESS, UNAUTHORIZED_CALLER, ZERO_ADDRESS_NOT_ALLOWED, OWNER_CANNOT_BE_ZERO, INVALID_REDEEM_CODE, TOKEN_TRANSFER_FAILED, INVALID_CARD_ID, CARD_ALREADY_REDEEMED, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO, PAGE_SIZE_TOO_LARGE, INVALID_RECIPIENT_ADDRESS, INSUFFICIENT_BALANCE
+        INVALID_TOKEN_ADDRESS, UNAUTHORIZED_CALLER, ZERO_ADDRESS_NOT_ALLOWED, OWNER_CANNOT_BE_ZERO, INVALID_REDEEM_CODE, TOKEN_TRANSFER_FAILED, INVALID_CARD_ID, CARD_ALREADY_REDEEMED, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO, PAGE_SIZE_TOO_LARGE, INVALID_RECIPIENT_ADDRESS, INSUFFICIENT_BALANCE, INVALID_DESCRIPTION, INVALID_LINK, INVALID_CARD_TYPE
     };
     use crate::types::structs::{Cards};
     use core::hash::{HashStateTrait};
@@ -128,23 +128,23 @@ pub mod RunesCardV5  {
             assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
             assert(amount > 0, AMOUNT_MUST_BE_GREATER_THAN_ZERO);
             assert(redeem_code_hash != 0, INVALID_REDEEM_CODE);
+            assert(description.len() > 0, INVALID_DESCRIPTION);
+            assert(link != 0, INVALID_LINK);
+            assert(card_type > 0, INVALID_CARD_TYPE);
 
             let caller = get_caller_address();
             let contract_address = get_contract_address();
             let current_id = self.card_counter.read();
             let new_id = current_id + 1;
 
-            // check if the caller has enough allowance
             let token_dispatcher = IERC20Dispatcher { contract_address: token };
             let allowance = token_dispatcher.allowance(caller, contract_address);
             assert(allowance >= amount, INSUFFICIENT_ALLOWANCE);
 
-            // Transfer tokens from creator to contract
             let token_dispatcher = IERC20Dispatcher { contract_address: token };
             let success = token_dispatcher.transfer_from(caller, contract_address, amount);
             assert(success, TOKEN_TRANSFER_FAILED);
 
-            // Create the card
             let card = Cards {
                 id: new_id,
                 creator: caller,
@@ -160,16 +160,13 @@ pub mod RunesCardV5  {
                 redeemed_by: Zero::zero(),
             };
 
-            // Store the card
             self.cards.write(new_id, card);
             self.card_counter.write(new_id);
 
-            // Add to user's card list
             let user_count = self.user_card_count.read(caller);
             self.user_cards.write((caller, user_count), new_id);
             self.user_card_count.write(caller, user_count + 1);
 
-            // Emit event
             self.emit(CardCreated {
                 id: new_id,
                 creator: caller,
@@ -188,20 +185,16 @@ pub mod RunesCardV5  {
 
             assert(!card.is_redeemed, CARD_ALREADY_REDEEMED);
 
-            // Hash the provided redeem code using Poseidon
             let computed_hash = PoseidonTrait::new().update(redeem_code).finalize();
             assert(computed_hash == card.redeem_code_hash, INVALID_REDEEM_CODE);
 
-            // Calculate protocol fee
             let fee_amount = (card.amount * self.protocol_fee.read()) / 10000;
             let redeem_amount = card.amount - fee_amount;
 
-            // Transfer tokens to redeemer
             let token_dispatcher = IERC20Dispatcher { contract_address: card.token };
             let success = token_dispatcher.transfer(caller, redeem_amount);
             assert(success, TOKEN_TRANSFER_FAILED);
 
-            // Transfer fee to owner if fee > 0
             if fee_amount > 0 {
                 let fee_success = token_dispatcher.transfer(self.owner.read(), fee_amount);
                 assert(fee_success, TOKEN_TRANSFER_FAILED);
@@ -210,18 +203,15 @@ pub mod RunesCardV5  {
                 self.total_fees_collected.write(card.token, current_fees + fee_amount);
             }
 
-            // Update card status
             card.is_redeemed = true;
             card.redeemed_by = caller;
             card.redeemed_at = get_block_timestamp();
             self.cards.write(id, card);
 
-            // Add to redeemer's redeemed card list
             let redeemed_count = self.redeemed_card_count.read(caller);
             self.redeemed_cards.write((caller, redeemed_count), id);
             self.redeemed_card_count.write(caller, redeemed_count + 1);
 
-            // Emit event
             self.emit(CardRedeemed {
                 id: id,
                 redeemer: caller,
@@ -265,7 +255,7 @@ pub mod RunesCardV5  {
             page_size: u64,
             user: ContractAddress,
         ) -> (Array<Cards>, u64) {
-            //let caller = get_caller_address();
+
             let total_count = self.user_card_count.read(user);
             
             assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
@@ -273,7 +263,6 @@ pub mod RunesCardV5  {
             
             let start_index = page * page_size;
             
-            // Return empty if start is beyond total
             if start_index >= total_count {
                 return (ArrayTrait::new(), total_count);
             }
@@ -394,17 +383,14 @@ pub mod RunesCardV5  {
             assert(!recipient.is_zero(), INVALID_RECIPIENT_ADDRESS);
             assert(amount > 0, AMOUNT_MUST_BE_GREATER_THAN_ZERO);
         
-            // Get contract's token balance
             let token_dispatcher = IERC20Dispatcher { contract_address: token };
             let contract_balance = token_dispatcher.balance_of(get_contract_address());
             
             assert(contract_balance >= amount, INSUFFICIENT_BALANCE);
         
-            // Transfer tokens to recipient
             let success = token_dispatcher.transfer(recipient, amount);
             assert(success, TOKEN_TRANSFER_FAILED);
         
-            // Emit event
             self.emit(FeesWithdrawn {
                 token: token,
                 amount: amount,

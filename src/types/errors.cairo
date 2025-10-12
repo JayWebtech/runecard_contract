@@ -16,3 +16,6 @@ pub const OWNER_CANNOT_BE_ZERO: felt252 = 'Owner cannot be zero';
 pub const PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO: felt252 = 'Page size must be > than zero';
 pub const PAGE_SIZE_TOO_LARGE: felt252 = 'Page size too large';
 pub const INVALID_RECIPIENT_ADDRESS: felt252 = 'Invalid recipient address';
+pub const INVALID_DESCRIPTION: felt252 = 'Invalid description';
+pub const INVALID_LINK: felt252 = 'Invalid link';
+pub const INVALID_CARD_TYPE: felt252 = 'Invalid card type';
