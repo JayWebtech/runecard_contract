@@ -1,6 +1,6 @@
 use starknet::ContractAddress;
 use starknet::class_hash::ClassHash;
-use crate::types::structs::{Cards};
+use crate::types::structs::{Cards, GlobalStats, TokenStats};
 
 #[starknet::interface]
 pub trait IRunesCard<TContractState> {
@@ -25,5 +25,9 @@ pub trait IRunesCard<TContractState> {
     fn withdraw_fees(ref self: TContractState, token: ContractAddress, amount: u256, recipient: ContractAddress);
     fn get_contract_token_balance(self: @TContractState, token: ContractAddress) -> u256;
     fn get_total_fees_collected(self: @TContractState, token: ContractAddress) -> u256;
+    fn get_global_stats(self: @TContractState) -> GlobalStats;
+    fn get_token_stats(self: @TContractState, token: ContractAddress) -> TokenStats;
+    fn get_all_tokens(self: @TContractState) -> Array<ContractAddress>;
+    fn get_token_list_paginated(self: @TContractState, page: u64, page_size: u64) -> (Array<ContractAddress>, u64);
 }   
 

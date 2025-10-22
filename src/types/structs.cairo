@@ -15,3 +15,22 @@ pub struct Cards {
     pub redeemed_at: u64,
     pub created_at: u64,
 }
+
+#[derive(Drop, Serde)]
+pub struct GlobalStats {
+    pub total_cards_created: u64,
+    pub total_cards_redeemed: u64,
+    pub total_cards_unredeemed: u64,
+    pub unique_creators: u64,
+    pub total_tokens_supported: u64,
+}
+
+#[derive(Drop, Serde)]
+pub struct TokenStats {
+    pub token: ContractAddress,
+    pub total_value_locked: u256,
+    pub total_value_redeemed: u256,
+    pub total_value_unredeemed: u256,
+    pub total_cards: u64,
+    pub fees_collected: u256,
+}

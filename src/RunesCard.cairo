@@ -1,6 +1,8 @@
 #[starknet::contract]
-pub mod RunesCardV1  {
+pub mod RunesCardV2 {
+    use core::hash::HashStateTrait;
     use core::num::traits::Zero;
+    use core::poseidon::PoseidonTrait;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::class_hash::ClassHash;
     use starknet::storage::{
@@ -10,13 +12,14 @@ pub mod RunesCardV1  {
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
     use crate::interface::IRunesCard::IRunesCard;
     use crate::types::errors::{
-        AMOUNT_MUST_BE_GREATER_THAN_ZERO, CLASS_HASH_CANNOT_BE_ZERO, CONTRACT_IS_ACTIVE_ALREADY,
-        CONTRACT_IS_PAUSED, CONTRACT_IS_PAUSED_ALREADY, INSUFFICIENT_ALLOWANCE,
-        INVALID_TOKEN_ADDRESS, UNAUTHORIZED_CALLER, ZERO_ADDRESS_NOT_ALLOWED, OWNER_CANNOT_BE_ZERO, INVALID_REDEEM_CODE, TOKEN_TRANSFER_FAILED, INVALID_CARD_ID, CARD_ALREADY_REDEEMED, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO, PAGE_SIZE_TOO_LARGE, INVALID_RECIPIENT_ADDRESS, INSUFFICIENT_BALANCE, INVALID_DESCRIPTION, INVALID_LINK, INVALID_CARD_TYPE
+        AMOUNT_MUST_BE_GREATER_THAN_ZERO, CARD_ALREADY_REDEEMED, CLASS_HASH_CANNOT_BE_ZERO,
+        CONTRACT_IS_ACTIVE_ALREADY, CONTRACT_IS_PAUSED, CONTRACT_IS_PAUSED_ALREADY,
+        INSUFFICIENT_ALLOWANCE, INSUFFICIENT_BALANCE, INVALID_CARD_ID, INVALID_CARD_TYPE,
+        INVALID_DESCRIPTION, INVALID_LINK, INVALID_RECIPIENT_ADDRESS, INVALID_REDEEM_CODE,
+        INVALID_TOKEN_ADDRESS, OWNER_CANNOT_BE_ZERO, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO,
+        PAGE_SIZE_TOO_LARGE, TOKEN_TRANSFER_FAILED, UNAUTHORIZED_CALLER, ZERO_ADDRESS_NOT_ALLOWED,
     };
-    use crate::types::structs::{Cards};
-    use core::hash::{HashStateTrait};
-    use core::poseidon::PoseidonTrait;
+    use crate::types::structs::{Cards, GlobalStats, TokenStats};
 
 
     #[event]
@@ -29,9 +32,9 @@ pub mod RunesCardV1  {
         Paused: Paused,
         Unpaused: Unpaused,
         ProtocolFeeChanged: ProtocolFeeChanged,
-        FeesWithdrawn: FeesWithdrawn,  
+        FeesWithdrawn: FeesWithdrawn,
     }
-    
+
 
     #[derive(Drop, starknet::Event)]
     pub struct CardCreated {
@@ -78,7 +81,7 @@ pub mod RunesCardV1  {
     }
 
     #[derive(Drop, starknet::Event)]
-        pub struct FeesWithdrawn {
+    pub struct FeesWithdrawn {
         pub token: ContractAddress,
         pub amount: u256,
         pub recipient: ContractAddress,
@@ -98,14 +101,18 @@ pub mod RunesCardV1  {
         redeemed_cards: Map<(ContractAddress, u64), u64>,
         redeemed_card_count: Map<ContractAddress, u64>,
         total_fees_collected: Map<ContractAddress, u256>,
+        unique_creators: Map<ContractAddress, bool>,
+        unique_creator_count: u64,
+        total_cards_redeemed: u64,
+        total_value_locked: Map<ContractAddress, u256>,
+        total_value_redeemed: Map<ContractAddress, u256>,
+        token_list: Map<u64, ContractAddress>,
+        token_list_count: u64,
+        is_token_registered: Map<ContractAddress, bool>,
     }
 
     #[constructor]
-    fn constructor(
-        ref self: ContractState,
-        owner: ContractAddress,
-        initial_fee: u256,
-    ) {
+    fn constructor(ref self: ContractState, owner: ContractAddress, initial_fee: u256) {
         assert(!owner.is_zero(), OWNER_CANNOT_BE_ZERO);
         self.owner.write(owner);
         self.version.write(1);
@@ -141,7 +148,6 @@ pub mod RunesCardV1  {
             let allowance = token_dispatcher.allowance(caller, contract_address);
             assert(allowance >= amount, INSUFFICIENT_ALLOWANCE);
 
-            let token_dispatcher = IERC20Dispatcher { contract_address: token };
             let success = token_dispatcher.transfer_from(caller, contract_address, amount);
             assert(success, TOKEN_TRANSFER_FAILED);
 
@@ -167,15 +173,35 @@ pub mod RunesCardV1  {
             self.user_cards.write((caller, user_count), new_id);
             self.user_card_count.write(caller, user_count + 1);
 
-            self.emit(CardCreated {
-                id: new_id,
-                creator: caller,
-                token: token,
-                amount: amount,
-                timestamp: get_block_timestamp(),
-            });
+            if !self.unique_creators.read(caller) {
+                self.unique_creators.write(caller, true);
+                let creator_count = self.unique_creator_count.read();
+                self.unique_creator_count.write(creator_count + 1);
+            }
+
+            if !self.is_token_registered.read(token) {
+                let token_count = self.token_list_count.read();
+                self.token_list.write(token_count, token);
+                self.token_list_count.write(token_count + 1);
+                self.is_token_registered.write(token, true);
+            }
+
+            let current_tvl = self.total_value_locked.read(token);
+            self.total_value_locked.write(token, current_tvl + amount);
+
+            self
+                .emit(
+                    CardCreated {
+                        id: new_id,
+                        creator: caller,
+                        token: token,
+                        amount: amount,
+                        timestamp: get_block_timestamp(),
+                    },
+                );
         }
 
+        // MODIFY redeem_card to track statistics
         fn redeem_card(ref self: ContractState, redeem_code: felt252, id: u64) {
             assert(!self.is_paused.read(), CONTRACT_IS_PAUSED);
             assert(id > 0 && id <= self.card_counter.read(), INVALID_CARD_ID);
@@ -203,6 +229,9 @@ pub mod RunesCardV1  {
                 self.total_fees_collected.write(card.token, current_fees + fee_amount);
             }
 
+            let card_token = card.token;
+            let card_amount = card.amount;
+
             card.is_redeemed = true;
             card.redeemed_by = caller;
             card.redeemed_at = get_block_timestamp();
@@ -212,12 +241,21 @@ pub mod RunesCardV1  {
             self.redeemed_cards.write((caller, redeemed_count), id);
             self.redeemed_card_count.write(caller, redeemed_count + 1);
 
-            self.emit(CardRedeemed {
-                id: id,
-                redeemer: caller,
-                amount: redeem_amount,
-                timestamp: get_block_timestamp(),
-            });
+            let total_redeemed = self.total_cards_redeemed.read();
+            self.total_cards_redeemed.write(total_redeemed + 1);
+
+            let current_redeemed = self.total_value_redeemed.read(card_token);
+            self.total_value_redeemed.write(card_token, current_redeemed + card_amount);
+
+            self
+                .emit(
+                    CardRedeemed {
+                        id: id,
+                        redeemer: caller,
+                        amount: redeem_amount,
+                        timestamp: get_block_timestamp(),
+                    },
+                );
         }
 
         fn get_card_balance(self: @ContractState, id: u64) -> u256 {
@@ -250,72 +288,65 @@ pub mod RunesCardV1  {
         }
 
         fn get_users_cards_paginated(
-            self: @ContractState, 
-            page: u64, 
-            page_size: u64,
-            user: ContractAddress,
+            self: @ContractState, page: u64, page_size: u64, user: ContractAddress,
         ) -> (Array<Cards>, u64) {
-
             let total_count = self.user_card_count.read(user);
-            
+
             assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
             assert(page_size <= 50, PAGE_SIZE_TOO_LARGE);
-            
+
             let start_index = page * page_size;
-            
+
             if start_index >= total_count {
                 return (ArrayTrait::new(), total_count);
             }
-            
+
             let mut cards = ArrayTrait::new();
             let mut i = start_index;
             let end_index = core::cmp::min(start_index + page_size, total_count);
-            
+
             while i < end_index {
                 let card_id = self.user_cards.read((user, i));
                 let card = self.cards.read(card_id);
                 cards.append(card);
                 i += 1;
             }
-            
+
             (cards, total_count)
         }
 
         fn get_users_redeemed_cards_paginated(
-            self: @ContractState, 
-            page: u64, 
-            page_size: u64,
-            user: ContractAddress
+            self: @ContractState, page: u64, page_size: u64, user: ContractAddress,
         ) -> (Array<Cards>, u64) {
             let total_count = self.redeemed_card_count.read(user);
-            
+
             assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
             assert(page_size <= 50, PAGE_SIZE_TOO_LARGE);
-            
+
             let start_index = page * page_size;
-            
+
             if start_index >= total_count {
                 return (ArrayTrait::new(), total_count);
             }
-            
+
             let mut cards = ArrayTrait::new();
             let mut i = start_index;
             let end_index = core::cmp::min(start_index + page_size, total_count);
-            
+
             while i < end_index {
                 let card_id = self.redeemed_cards.read((user, i));
                 let card = self.cards.read(card_id);
                 cards.append(card);
                 i += 1;
             }
-            
+
             (cards, total_count)
         }
 
         fn get_user_redeemed_card_count(self: @ContractState, user: ContractAddress) -> u64 {
             self.redeemed_card_count.read(user)
         }
-        
+
         fn get_user_card_count(self: @ContractState, user: ContractAddress) -> u64 {
             self.user_card_count.read(user)
         }
@@ -373,32 +404,35 @@ pub mod RunesCardV1  {
         }
 
         fn withdraw_fees(
-            ref self: ContractState, 
-            token: ContractAddress, 
+            ref self: ContractState,
+            token: ContractAddress,
             amount: u256,
-            recipient: ContractAddress
+            recipient: ContractAddress,
         ) {
             self._only_owner();
             assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
             assert(!recipient.is_zero(), INVALID_RECIPIENT_ADDRESS);
             assert(amount > 0, AMOUNT_MUST_BE_GREATER_THAN_ZERO);
-        
+
             let token_dispatcher = IERC20Dispatcher { contract_address: token };
             let contract_balance = token_dispatcher.balance_of(get_contract_address());
-            
+
             assert(contract_balance >= amount, INSUFFICIENT_BALANCE);
-        
+
             let success = token_dispatcher.transfer(recipient, amount);
             assert(success, TOKEN_TRANSFER_FAILED);
-        
-            self.emit(FeesWithdrawn {
-                token: token,
-                amount: amount,
-                recipient: recipient,
-                timestamp: get_block_timestamp(),
-            });
+
+            self
+                .emit(
+                    FeesWithdrawn {
+                        token: token,
+                        amount: amount,
+                        recipient: recipient,
+                        timestamp: get_block_timestamp(),
+                    },
+                );
         }
-        
+
         fn get_contract_token_balance(self: @ContractState, token: ContractAddress) -> u256 {
             assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
             let token_dispatcher = IERC20Dispatcher { contract_address: token };
@@ -409,6 +443,87 @@ pub mod RunesCardV1  {
             self.total_fees_collected.read(token)
         }
 
+        fn get_global_stats(self: @ContractState) -> GlobalStats {
+            let total_cards = self.card_counter.read();
+            let total_redeemed = self.total_cards_redeemed.read();
+
+            GlobalStats {
+                total_cards_created: total_cards,
+                total_cards_redeemed: total_redeemed,
+                total_cards_unredeemed: total_cards - total_redeemed,
+                unique_creators: self.unique_creator_count.read(),
+                total_tokens_supported: self.token_list_count.read(),
+            }
+        }
+
+        fn get_token_stats(self: @ContractState, token: ContractAddress) -> TokenStats {
+            assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
+
+            let total_locked = self.total_value_locked.read(token);
+            let total_redeemed = self.total_value_redeemed.read(token);
+
+            let mut card_count: u64 = 0;
+            let total_cards = self.card_counter.read();
+            let mut i: u64 = 1;
+
+            while i <= total_cards {
+                let card = self.cards.read(i);
+                if card.token == token {
+                    card_count += 1;
+                }
+                i += 1;
+            }
+
+            TokenStats {
+                token: token,
+                total_value_locked: total_locked,
+                total_value_redeemed: total_redeemed,
+                total_value_unredeemed: total_locked - total_redeemed,
+                total_cards: card_count,
+                fees_collected: self.total_fees_collected.read(token),
+            }
+        }
+
+        fn get_all_tokens(self: @ContractState) -> Array<ContractAddress> {
+            let count = self.token_list_count.read();
+            let mut tokens = ArrayTrait::new();
+            let mut i: u64 = 0;
+
+            while i < count {
+                let token = self.token_list.read(i);
+                tokens.append(token);
+                i += 1;
+            }
+
+            tokens
+        }
+
+        fn get_token_list_paginated(
+            self: @ContractState, page: u64, page_size: u64,
+        ) -> (Array<ContractAddress>, u64) {
+            let total_count = self.token_list_count.read();
+
+            assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
+            assert(page_size <= 50, PAGE_SIZE_TOO_LARGE);
+
+            let start_index = page * page_size;
+
+            if start_index >= total_count {
+                return (ArrayTrait::new(), total_count);
+            }
+
+            let mut tokens = ArrayTrait::new();
+            let mut i = start_index;
+            let end_index = core::cmp::min(start_index + page_size, total_count);
+
+            while i < end_index {
+                let token = self.token_list.read(i);
+                tokens.append(token);
+                i += 1;
+            }
+
+            (tokens, total_count)
+        }
     }
 
     #[generate_trait]
