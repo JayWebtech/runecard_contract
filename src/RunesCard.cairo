@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod RunesCardV2 {
+pub mod RunesCardV5 {
     use core::hash::HashStateTrait;
     use core::num::traits::Zero;
     use core::poseidon::PoseidonTrait;
@@ -14,12 +14,13 @@ pub mod RunesCardV2 {
     use crate::types::errors::{
         AMOUNT_MUST_BE_GREATER_THAN_ZERO, CARD_ALREADY_REDEEMED, CLASS_HASH_CANNOT_BE_ZERO,
         CONTRACT_IS_ACTIVE_ALREADY, CONTRACT_IS_PAUSED, CONTRACT_IS_PAUSED_ALREADY,
-        INSUFFICIENT_ALLOWANCE, INSUFFICIENT_BALANCE, INVALID_CARD_ID, INVALID_CARD_TYPE,
+        INSUFFICIENT_ALLOWANCE, INSUFFICIENT_FEES_TO_WITHDRAW, INVALID_CARD_ID, INVALID_CARD_TYPE,
         INVALID_DESCRIPTION, INVALID_LINK, INVALID_RECIPIENT_ADDRESS, INVALID_REDEEM_CODE,
-        INVALID_TOKEN_ADDRESS, OWNER_CANNOT_BE_ZERO, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO,
-        PAGE_SIZE_TOO_LARGE, TOKEN_TRANSFER_FAILED, UNAUTHORIZED_CALLER, ZERO_ADDRESS_NOT_ALLOWED,
+        INVALID_TOKEN_ADDRESS, INVALID_WITHDRAWAL_ID, OWNER_CANNOT_BE_ZERO,
+        PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO, PAGE_SIZE_TOO_LARGE, TOKEN_TRANSFER_FAILED,
+        UNAUTHORIZED_CALLER, ZERO_ADDRESS_NOT_ALLOWED,
     };
-    use crate::types::structs::{Cards, GlobalStats, TokenStats};
+    use crate::types::structs::{Cards, GlobalStats, TokenStats, WithdrawalRecord};
 
 
     #[event]
@@ -109,6 +110,11 @@ pub mod RunesCardV2 {
         token_list: Map<u64, ContractAddress>,
         token_list_count: u64,
         is_token_registered: Map<ContractAddress, bool>,
+        total_fees_withdrawn: Map<ContractAddress, u256>,
+        withdrawal_records: Map<u64, WithdrawalRecord>,
+        withdrawal_counter: u64,
+        token_withdrawals: Map<(ContractAddress, u64), u64>,
+        token_withdrawal_count: Map<ContractAddress, u64>,
     }
 
     #[constructor]
@@ -414,13 +420,43 @@ pub mod RunesCardV2 {
             assert(!recipient.is_zero(), INVALID_RECIPIENT_ADDRESS);
             assert(amount > 0, AMOUNT_MUST_BE_GREATER_THAN_ZERO);
 
+            // Calculate available fees to withdraw
+            let total_fees_collected = self.total_fees_collected.read(token);
+            let total_fees_withdrawn = self.total_fees_withdrawn.read(token);
+            let withdrawable_amount = total_fees_collected - total_fees_withdrawn;
+
+            // Ensure we only withdraw collected fees
+            assert(amount <= withdrawable_amount, INSUFFICIENT_FEES_TO_WITHDRAW);
+
+            // Transfer tokens
             let token_dispatcher = IERC20Dispatcher { contract_address: token };
-            let contract_balance = token_dispatcher.balance_of(get_contract_address());
-
-            assert(contract_balance >= amount, INSUFFICIENT_BALANCE);
-
             let success = token_dispatcher.transfer(recipient, amount);
             assert(success, TOKEN_TRANSFER_FAILED);
+
+            // Update withdrawal tracking
+            let new_withdrawn_total = total_fees_withdrawn + amount;
+            self.total_fees_withdrawn.write(token, new_withdrawn_total);
+
+            // Create withdrawal record
+            let withdrawal_id = self.withdrawal_counter.read() + 1;
+            let caller = get_caller_address();
+
+            let record = WithdrawalRecord {
+                id: withdrawal_id,
+                token: token,
+                amount: amount,
+                recipient: recipient,
+                withdrawn_by: caller,
+                timestamp: get_block_timestamp(),
+            };
+
+            self.withdrawal_records.write(withdrawal_id, record);
+            self.withdrawal_counter.write(withdrawal_id);
+
+            // Track withdrawal per token
+            let token_withdrawal_count = self.token_withdrawal_count.read(token);
+            self.token_withdrawals.write((token, token_withdrawal_count), withdrawal_id);
+            self.token_withdrawal_count.write(token, token_withdrawal_count + 1);
 
             self
                 .emit(
@@ -461,6 +497,8 @@ pub mod RunesCardV2 {
 
             let total_locked = self.total_value_locked.read(token);
             let total_redeemed = self.total_value_redeemed.read(token);
+            let fees_collected = self.total_fees_collected.read(token);
+            let fees_withdrawn = self.total_fees_withdrawn.read(token);
 
             let mut card_count: u64 = 0;
             let total_cards = self.card_counter.read();
@@ -480,7 +518,9 @@ pub mod RunesCardV2 {
                 total_value_redeemed: total_redeemed,
                 total_value_unredeemed: total_locked - total_redeemed,
                 total_cards: card_count,
-                fees_collected: self.total_fees_collected.read(token),
+                fees_collected: fees_collected,
+                fees_withdrawn: fees_withdrawn,
+                fees_available: fees_collected - fees_withdrawn
             }
         }
 
@@ -523,6 +563,74 @@ pub mod RunesCardV2 {
             }
 
             (tokens, total_count)
+        }
+        fn get_withdrawable_fees(self: @ContractState, token: ContractAddress) -> u256 {
+            assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
+
+            let total_collected = self.total_fees_collected.read(token);
+            let total_withdrawn = self.total_fees_withdrawn.read(token);
+
+            total_collected - total_withdrawn
+        }
+
+        // NEW: Get all withdrawal history for a token
+        fn get_withdrawal_history(
+            self: @ContractState, token: ContractAddress,
+        ) -> Array<WithdrawalRecord> {
+            assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
+
+            let count = self.token_withdrawal_count.read(token);
+            let mut records = ArrayTrait::new();
+            let mut i: u64 = 0;
+
+            while i < count {
+                let withdrawal_id = self.token_withdrawals.read((token, i));
+                let record = self.withdrawal_records.read(withdrawal_id);
+                records.append(record);
+                i += 1;
+            }
+
+            records
+        }
+
+        // NEW: Get withdrawal history with pagination
+        fn get_withdrawal_history_paginated(
+            self: @ContractState, token: ContractAddress, page: u64, page_size: u64,
+        ) -> (Array<WithdrawalRecord>, u64) {
+            assert(!token.is_zero(), INVALID_TOKEN_ADDRESS);
+            assert(page_size > 0, PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO);
+            assert(page_size <= 50, PAGE_SIZE_TOO_LARGE);
+
+            let total_count = self.token_withdrawal_count.read(token);
+            let start_index = page * page_size;
+
+            if start_index >= total_count {
+                return (ArrayTrait::new(), total_count);
+            }
+
+            let mut records = ArrayTrait::new();
+            let mut i = start_index;
+            let end_index = core::cmp::min(start_index + page_size, total_count);
+
+            while i < end_index {
+                let withdrawal_id = self.token_withdrawals.read((token, i));
+                let record = self.withdrawal_records.read(withdrawal_id);
+                records.append(record);
+                i += 1;
+            }
+
+            (records, total_count)
+        }
+
+        // NEW: Get specific withdrawal by ID
+        fn get_withdrawal_by_id(self: @ContractState, id: u64) -> WithdrawalRecord {
+            assert(id > 0 && id <= self.withdrawal_counter.read(), INVALID_WITHDRAWAL_ID);
+            self.withdrawal_records.read(id)
+        }
+
+        // NEW: Get total number of withdrawals
+        fn get_total_withdrawals_count(self: @ContractState) -> u64 {
+            self.withdrawal_counter.read()
         }
     }
 

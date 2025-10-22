@@ -19,3 +19,5 @@ pub const INVALID_RECIPIENT_ADDRESS: felt252 = 'Invalid recipient address';
 pub const INVALID_DESCRIPTION: felt252 = 'Invalid description';
 pub const INVALID_LINK: felt252 = 'Invalid link';
 pub const INVALID_CARD_TYPE: felt252 = 'Invalid card type';
+pub const INSUFFICIENT_FEES_TO_WITHDRAW: felt252 = 'Insufficient fees to withdraw';
+pub const INVALID_WITHDRAWAL_ID: felt252 = 'Invalid withdrawal ID';

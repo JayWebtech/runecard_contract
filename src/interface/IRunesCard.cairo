@@ -1,6 +1,6 @@
 use starknet::ContractAddress;
 use starknet::class_hash::ClassHash;
-use crate::types::structs::{Cards, GlobalStats, TokenStats};
+use crate::types::structs::{Cards, GlobalStats, TokenStats, WithdrawalRecord};
 
 #[starknet::interface]
 pub trait IRunesCard<TContractState> {
@@ -29,5 +29,15 @@ pub trait IRunesCard<TContractState> {
     fn get_token_stats(self: @TContractState, token: ContractAddress) -> TokenStats;
     fn get_all_tokens(self: @TContractState) -> Array<ContractAddress>;
     fn get_token_list_paginated(self: @TContractState, page: u64, page_size: u64) -> (Array<ContractAddress>, u64);
+    fn get_withdrawable_fees(self: @TContractState, token: ContractAddress) -> u256;
+    fn get_withdrawal_history(self: @TContractState, token: ContractAddress) -> Array<WithdrawalRecord>;
+    fn get_withdrawal_history_paginated(
+        self: @TContractState,
+        token: ContractAddress,
+        page: u64,
+        page_size: u64
+    ) -> (Array<WithdrawalRecord>, u64);
+    fn get_withdrawal_by_id(self: @TContractState, id: u64) -> WithdrawalRecord;
+    fn get_total_withdrawals_count(self: @TContractState) -> u64;
 }   
 

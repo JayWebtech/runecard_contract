@@ -33,4 +33,17 @@ pub struct TokenStats {
     pub total_value_unredeemed: u256,
     pub total_cards: u64,
     pub fees_collected: u256,
+    pub fees_withdrawn: u256,
+    pub fees_available: u256, 
 }
+
+#[derive(Drop, Copy, Serde, starknet::Store)]
+pub struct WithdrawalRecord {
+    pub id: u64,
+    pub token: ContractAddress,
+    pub amount: u256,
+    pub recipient: ContractAddress,
+    pub withdrawn_by: ContractAddress,
+    pub timestamp: u64,
+}
+
